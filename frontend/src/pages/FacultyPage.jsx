@@ -18,8 +18,6 @@ export default function FacultyPage() {
     staff_id: '',
     dept_id: '',
     max_weekly_hours: 40,
-    email: '',
-    phone: '',
     status: 'Active',
     notes: ''
   })
@@ -244,8 +242,6 @@ export default function FacultyPage() {
       staff_id: '',
       dept_id: '',
       max_weekly_hours: 40,
-      email: '',
-      phone: '',
       status: 'Active',
       notes: ''
     })
@@ -326,20 +322,7 @@ export default function FacultyPage() {
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
-              <input
-                type="email"
-                placeholder="Email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-              />
-              <input
-                type="tel"
-                placeholder="Phone"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-              />
+
 
               <input
                 type="number"
@@ -436,7 +419,6 @@ export default function FacultyPage() {
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Staff ID</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Level</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Max Hours</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Email</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Status</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
               </tr>
@@ -448,7 +430,6 @@ export default function FacultyPage() {
                   <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{member.staff_id}</td>
 
                   <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{member.max_weekly_hours}h</td>
-                  <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{member.email}</td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                       member.status === 'Active' 

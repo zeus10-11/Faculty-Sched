@@ -38,45 +38,16 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, roleMiddleware(['Admin', 'Scheduler']), async (req, res) => {
   try {
     const supabase = req.app.locals.supabase;
-    const { name, staff_id, dept_id, qualification_level, max_weekly_hours, email, phone, status, notes } = req.body;
-
-    // Check for duplicate email
-    if (email) {
-      const { data: existing } = await supabase
-        .from('faculty')
-        .select('id')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (existing) {
-        return res.status(409).json({ error: `A faculty member with email "${email}" already exists. Please use a different email.` });
-      }
-    }
-
-    // Check for duplicate staff_id
-    if (staff_id) {
-      const { data: existingStaff } = await supabase
-        .from('faculty')
-        .select('id')
-        .eq('staff_id', staff_id)
-        .maybeSingle();
-
-      if (existingStaff) {
-        return res.status(409).json({ error: `A faculty member with Staff ID "${staff_id}" already exists. Please use a different Staff ID.` });
-      }
-    }
+    const { name, staff_id, dept_id, qualification_level, max_weekly_hours, status, notes } = req.body;
 
     const { data, error } = await supabase
       .from('faculty')
-      .insert([{ name, staff_id, dept_id, qualification_level, max_weekly_hours, email, phone, status, notes }])
+      .insert([{ name, staff_id, dept_id, qualification_level, max_weekly_hours, status, notes }])
       .select();
 
     if (error) throw error;
     res.status(201).json(data[0]);
   } catch (error) {
-    if (error.message && error.message.includes('duplicate key')) {
-      return res.status(409).json({ error: 'A faculty member with this email or staff ID already exists.' });
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -85,34 +56,17 @@ router.post('/', authMiddleware, roleMiddleware(['Admin', 'Scheduler']), async (
 router.put('/:id', authMiddleware, roleMiddleware(['Admin', 'Scheduler']), async (req, res) => {
   try {
     const supabase = req.app.locals.supabase;
-    const { name, staff_id, dept_id, qualification_level, max_weekly_hours, email, phone, status, notes } = req.body;
-
-    // Check for duplicate email (exclude current faculty member)
-    if (email) {
-      const { data: existing } = await supabase
-        .from('faculty')
-        .select('id')
-        .eq('email', email)
-        .neq('id', req.params.id)
-        .maybeSingle();
-
-      if (existing) {
-        return res.status(409).json({ error: `A faculty member with email "${email}" already exists. Please use a different email.` });
-      }
-    }
+    const { name, staff_id, dept_id, qualification_level, max_weekly_hours, status, notes } = req.body;
 
     const { data, error } = await supabase
       .from('faculty')
-      .update({ name, staff_id, dept_id, qualification_level, max_weekly_hours, email, phone, status, notes })
+      .update({ name, staff_id, dept_id, qualification_level, max_weekly_hours, status, notes })
       .eq('id', req.params.id)
       .select();
 
     if (error) throw error;
     res.json(data[0]);
   } catch (error) {
-    if (error.message && error.message.includes('duplicate key')) {
-      return res.status(409).json({ error: 'A faculty member with this email or staff ID already exists.' });
-    }
     res.status(500).json({ error: error.message });
   }
 });
