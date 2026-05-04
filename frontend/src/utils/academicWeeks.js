@@ -4,12 +4,13 @@
  * Week ~52 = last week of July
  */
 
-/** Returns the Sunday that starts Week 1 of the academic year containing referenceDate. */
+/** Returns the Sunday that starts Week 1 of the academic year containing referenceDate.
+ *  When before August, defaults to the UPCOMING academic year (current year's August).
+ */
 export const getAcademicYearStart = (referenceDate = new Date()) => {
-  const year =
-    referenceDate.getMonth() >= 7
-      ? referenceDate.getFullYear()
-      : referenceDate.getFullYear() - 1
+  // Always use the current calendar year's August as the academic year start
+  // This ensures we schedule for the upcoming academic year (Aug 2026–Jul 2027)
+  const year = referenceDate.getFullYear()
   const aug1 = new Date(year, 7, 1)
   const day = aug1.getDay() // 0=Sun … 6=Sat
   const daysToSunday = (7 - day) % 7 // 0 if already Sunday
