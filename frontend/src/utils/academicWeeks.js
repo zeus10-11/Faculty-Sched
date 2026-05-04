@@ -1,20 +1,20 @@
 /**
  * Academic Year Week Utilities
- * Week 1 = week starting on the first Sunday on/after August 1
+ * Week 1 = week starting on the first Monday on/after August 1
  * Week ~52 = last week of July
+ * Academic year 2026–2027 starts Monday Aug 3, 2026
  */
 
-/** Returns the Sunday that starts Week 1 of the academic year containing referenceDate.
- *  When before August, defaults to the UPCOMING academic year (current year's August).
+/** Returns the Monday that starts Week 1 of the academic year.
+ *  Always uses the current calendar year's August.
  */
 export const getAcademicYearStart = (referenceDate = new Date()) => {
-  // Always use the current calendar year's August as the academic year start
-  // This ensures we schedule for the upcoming academic year (Aug 2026–Jul 2027)
   const year = referenceDate.getFullYear()
   const aug1 = new Date(year, 7, 1)
-  const day = aug1.getDay() // 0=Sun … 6=Sat
-  const daysToSunday = (7 - day) % 7 // 0 if already Sunday
-  return new Date(year, 7, 1 + daysToSunday)
+  const day = aug1.getDay() // 0=Sun, 1=Mon … 6=Sat
+  // Find the first Monday on or after Aug 1
+  const daysToMonday = day === 0 ? 1 : day === 1 ? 0 : (8 - day)
+  return new Date(year, 7, 1 + daysToMonday)
 }
 
 /** Returns 1-based academic week number for a date. */
@@ -27,7 +27,7 @@ export const getAcademicWeekNumber = (date) => {
   return Math.floor(diff / (7 * 24 * 60 * 60 * 1000)) + 1
 }
 
-/** Returns the Sunday (start) of academic week `weekNum`. */
+/** Returns the Monday (start) of academic week `weekNum`. */
 export const getWeekStartForAcademicWeek = (weekNum, referenceDate = new Date()) => {
   const yearStart = getAcademicYearStart(referenceDate)
   const result = new Date(yearStart)
@@ -35,7 +35,7 @@ export const getWeekStartForAcademicWeek = (weekNum, referenceDate = new Date())
   return result
 }
 
-/** Returns the Saturday (end) of academic week `weekNum`. */
+/** Returns the Sunday (end) of academic week `weekNum`. */
 export const getWeekEndForAcademicWeek = (weekNum, referenceDate = new Date()) => {
   const start = getWeekStartForAcademicWeek(weekNum, referenceDate)
   const end = new Date(start)
@@ -53,9 +53,9 @@ export const toDateString = (date) => {
 }
 
 const fmtShort = (date) =>
-  new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
-/** Returns a label like "Week 3 (18 Aug – 24 Aug)". */
+/** Returns a label like "Week 3 (18 Aug 2026 – 24 Aug 2026)". */
 export const getAcademicWeekLabel = (weekNum, referenceDate = new Date()) => {
   const start = getWeekStartForAcademicWeek(weekNum, referenceDate)
   const end = getWeekEndForAcademicWeek(weekNum, referenceDate)
