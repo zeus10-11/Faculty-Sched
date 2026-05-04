@@ -13,8 +13,8 @@ async function createAdminUser() {
     
     // Create Supabase Auth user
     const { data: { user }, error: authError } = await supabase.auth.admin.createUser({
-      email: 'admin@university.edu',
-      password: 'password123',
+      email: 'bijumathew@university.edu',
+      password: 'bijumathew',
       email_confirm: true
     });
 
@@ -30,8 +30,8 @@ async function createAdminUser() {
       .from('users')
       .insert({
         id: user.id,
-        email: 'admin@university.edu',
-        name: 'Admin User',
+        email: 'bijumathew@university.edu',
+        name: 'bijumathew',
         role: 'Admin'
       })
       .select();
@@ -43,8 +43,8 @@ async function createAdminUser() {
 
     console.log('✅ User record created in database');
     console.log('\n🎉 Admin user ready! Try login:');
-    console.log('Email: admin@university.edu');
-    console.log('Password: password123');
+    console.log('Email: bijumathew@university.edu');
+    console.log('Password: bijumathew');
 
   } catch (error) {
     console.error('Error:', error);

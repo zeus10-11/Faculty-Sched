@@ -48,7 +48,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, roleMiddleware(['Admin', 'Scheduler', 'Faculty']), async (req, res) => {
   try {
     const supabase = req.app.locals.supabase;
-    const { programme_id, module_id, faculty_id, room_id, session_date, start_time, duration_hours, session_type, is_extra, notes } = req.body;
+    const { programme_id, module_id, faculty_id, room_id, session_date, start_time, duration_hours, session_type, section_number, is_extra, notes } = req.body;
 
     // Validate required fields
     if (!programme_id || !module_id || !faculty_id || !session_date || !start_time || !duration_hours) {
@@ -75,7 +75,7 @@ router.post('/', authMiddleware, roleMiddleware(['Admin', 'Scheduler', 'Faculty'
       .from('sessions')
       .insert([{ 
         programme_id, module_id, faculty_id, room_id, session_date, 
-        start_time, duration_hours: durationInt, session_type, is_extra, notes,
+        start_time, duration_hours: durationInt, session_type, section_number, is_extra, notes,
         created_by: req.user.userId
       }])
       .select();
@@ -107,11 +107,11 @@ router.post('/', authMiddleware, roleMiddleware(['Admin', 'Scheduler', 'Faculty'
 router.put('/:id', authMiddleware, roleMiddleware(['Admin', 'Scheduler']), async (req, res) => {
   try {
     const supabase = req.app.locals.supabase;
-    const { session_date, start_time, duration_hours, session_type, is_locked, notes } = req.body;
+    const { session_date, start_time, duration_hours, session_type, section_number, is_locked, notes } = req.body;
 
     const { data, error } = await supabase
       .from('sessions')
-      .update({ session_date, start_time, duration_hours, session_type, is_locked, notes })
+      .update({ session_date, start_time, duration_hours, session_type, section_number, is_locked, notes })
       .eq('id', req.params.id)
       .select();
 
