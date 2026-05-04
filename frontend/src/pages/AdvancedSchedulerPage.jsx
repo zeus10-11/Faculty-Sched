@@ -12,6 +12,14 @@ import {
   toDateString
 } from '../utils/academicWeeks'
 
+/** Format date as YYYY-MM-DD using local timezone (avoids UTC shift from toISOString) */
+const formatLocalDate = (date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export default function AdvancedSchedulerPage() {
   // State
   const [step, setStep] = useState(1) // 1: Date Range, 2: Programme, 3: Module, 4: Review/Generate
@@ -140,7 +148,7 @@ export default function AdvancedSchedulerPage() {
               continue
             }
             
-            const dateStr = currentDate.toISOString().split('T')[0]
+            const dateStr = formatLocalDate(currentDate)
             const startTime = `${9 + (section - 1) * 2}:00`
             const timeSlot = `${dateStr}-${startTime}`
             const sectionKey = `${selectedProgramme.id}-${selectedModule.id}-${section}`
