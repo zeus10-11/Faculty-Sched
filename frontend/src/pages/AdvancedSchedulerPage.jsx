@@ -262,7 +262,7 @@ export default function AdvancedSchedulerPage() {
         alert(`✅ Successfully scheduled ${successCount} sessions!`)
         setGeneratedSchedule([])
         setStep(1)
-        setDateRange({ startDate: '', endDate: '' })
+        setWeekRange({ startWeek: '', endWeek: '' })
         setSelectedProgramme(null)
         setSelectedModule(null)
       } else {
