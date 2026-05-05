@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     start_time TIME NOT NULL,
     duration_hours INT NOT NULL,
     session_type VARCHAR(50),
+    section_number INT,
     is_extra BOOLEAN DEFAULT FALSE,
     is_locked BOOLEAN DEFAULT FALSE,
     notes TEXT,
