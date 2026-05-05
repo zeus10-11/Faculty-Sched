@@ -7,9 +7,7 @@ import {
   getAcademicWeekOptions,
   getAcademicWeekNumber,
   getWeekStartForAcademicWeek,
-  getWeekEndForAcademicWeek,
-  getAcademicWeekLabel,
-  toDateString
+  getAcademicWeekLabel
 } from '../utils/academicWeeks'
 
 /** Format date as YYYY-MM-DD using local timezone (avoids UTC shift from toISOString) */
@@ -35,8 +33,10 @@ export default function AdvancedSchedulerPage() {
   const [selectedProgramme, setSelectedProgramme] = useState(null)
   const [selectedModule, setSelectedModule] = useState(null)
   const [programmeSessions, setProgrammeSessions] = useState([])
+  const [sectionsPerWeek, setSectionsPerWeek] = useState(6)
+  const [sectionsPerDay, setSectionsPerDay] = useState(1)
 
-  const SECTIONS_PER_DAY = 5
+  const MAX_SECTIONS_PER_DAY = 5
   const HOURS_PER_SECTION = 1.5
   const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
@@ -71,8 +71,19 @@ export default function AdvancedSchedulerPage() {
     setWeekRange({ startWeek: '', endWeek: '' })
     setSelectedProgramme(null)
     setSelectedModule(null)
+    setSectionsPerWeek(6)
+    setSectionsPerDay(1)
     setGeneratedSchedule([])
     setLoading(false)
+  }
+
+  /** Fisher-Yates shuffle (in-place) */
+  const shuffleArray = (arr) => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    return arr
   }
 
   const handleGenerateSchedule = async () => {
@@ -84,13 +95,17 @@ export default function AdvancedSchedulerPage() {
       alert('End week must be greater than or equal to start week')
       return
     }
+    if (sectionsPerDay * 5 < sectionsPerWeek) {
+      alert(`Cannot fit ${sectionsPerWeek} sections/week with max ${sectionsPerDay}/day (only ${sectionsPerDay * 5} slots available Mon–Fri)`)
+      return
+    }
 
     setLoading(true)
     try {
       // Convert week numbers to actual dates
-      const startDate = getWeekStartForAcademicWeek(Number(weekRange.startWeek))
-      const endDate = getWeekEndForAcademicWeek(Number(weekRange.endWeek))
-      
+      const startWeekNum = Number(weekRange.startWeek)
+      const endWeekNum = Number(weekRange.endWeek)
+
       // Fetch unavailable periods
       let unavailablePeriods = []
       try {
@@ -100,7 +115,8 @@ export default function AdvancedSchedulerPage() {
         console.log('Could not fetch unavailable periods')
         unavailablePeriods = []
       }
-      
+
+      // Fetch faculty assigned to this module
       let moduleAssignments = []
       try {
         const res = await facultyModuleService.getByModule(selectedModule.id)
@@ -109,14 +125,10 @@ export default function AdvancedSchedulerPage() {
         console.log('No faculty assignments found for this module yet')
         moduleAssignments = []
       }
-      
-      // If no faculty assigned, use all available faculty
+
       let availableFaculty = moduleAssignments.map(ma => ma.faculty)
-      
       if (availableFaculty.length === 0) {
-        // Use all active faculty as fallback
         availableFaculty = faculty.filter(f => f.status === 'Active')
-        
         if (availableFaculty.length === 0) {
           alert('No faculty available to schedule. Please add faculty members first.')
           setLoading(false)
@@ -124,111 +136,114 @@ export default function AdvancedSchedulerPage() {
         }
       }
 
-      // Generate schedule with intelligent conflict AVOIDANCE
       const schedule = []
-      const facultyScheduleMap = {} // Track faculty schedules to AVOID conflicts
-      const moduleScheduleMap = {} // Track module schedules for each section
-      
-      let currentDate = new Date(startDate)
       let facultyRotationIndex = 0
 
-      while (currentDate <= endDate) {
-        const dayOfWeek = currentDate.getDay()
-        
-        // Only schedule Monday-Friday
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-          for (let section = 1; section <= SECTIONS_PER_DAY; section++) {
-            // Check if this day/section is unavailable
-            const isUnavailable = unavailablePeriods.some(p => 
+      // Process each week independently
+      for (let weekNum = startWeekNum; weekNum <= endWeekNum; weekNum++) {
+        const weekStart = getWeekStartForAcademicWeek(weekNum)
+
+        // Build all possible slots for this week: 5 weekdays × MAX_SECTIONS_PER_DAY sections
+        const allSlots = []
+        for (let dayOffset = 0; dayOffset < 5; dayOffset++) { // Mon=0 .. Fri=4
+          const slotDate = new Date(weekStart)
+          slotDate.setDate(weekStart.getDate() + dayOffset)
+          const dayOfWeek = slotDate.getDay() // 1=Mon .. 5=Fri
+
+          for (let section = 1; section <= MAX_SECTIONS_PER_DAY; section++) {
+            // Skip unavailable slots
+            const isUnavailable = unavailablePeriods.some(p =>
               p.day_of_week === dayOfWeek && p.section_number === section
             )
-            
-            if (isUnavailable) {
-              console.log(`Skipping ${currentDate.toISOString().split('T')[0]} Section ${section} - marked as unavailable`)
-              continue
-            }
-            
-            const dateStr = formatLocalDate(currentDate)
-            const startTime = `${9 + (section - 1) * 2}:00`
-            const timeSlot = `${dateStr}-${startTime}`
-            const sectionKey = `${selectedProgramme.id}-${selectedModule.id}-${section}`
-            
-            // Skip if section already scheduled
-            if (moduleScheduleMap[sectionKey]) {
-              continue
-            }
+            if (isUnavailable) continue
 
-            // Find a faculty member without conflict (intelligent rotation)
-            let sessionFaculty = null
-            let attemptCount = 0
-            
-            while (sessionFaculty === null && attemptCount < availableFaculty.length) {
-              const candidateFaculty = availableFaculty[facultyRotationIndex % availableFaculty.length]
-              const facultyKey = `${candidateFaculty.id}-${timeSlot}`
-              
-              // Check if this faculty is available at this time
-              if (!facultyScheduleMap[facultyKey]) {
-                sessionFaculty = candidateFaculty
-                break
-              }
-              
-              facultyRotationIndex++
-              attemptCount++
-            }
-
-            // If no faculty found, we have a scheduling issue
-            if (sessionFaculty === null) {
-              console.warn(`Could not find available faculty for ${dateStr} Section ${section}`)
-              continue
-            }
-
-            const facultyKey = `${sessionFaculty.id}-${timeSlot}`
-            
-            // Assign a room (round-robin through available rooms)
-            const availableRooms = faculty // This will be populated - using it as placeholder
-            let roomId = null
-            if (modules && modules.length > 0) {
-              // Use first available room (or assign based on capacity if rooms available)
-              const modData = modules.find(m => m.id === selectedModule.id)
-              // Room will be TBD initially, users can assign later
-              roomId = null
-            }
-            
-            schedule.push({
-              programme_id: selectedProgramme.id,
-              module_id: selectedModule.id,
-              faculty_id: sessionFaculty.id,
-              faculty_name: sessionFaculty.name,
-              session_date: dateStr,
-              start_time: startTime,
-              duration_hours: HOURS_PER_SECTION,
-              session_type: 'Lecture',
-              section_number: section,
-              academic_week: getAcademicWeekNumber(new Date(dateStr)),
-              is_extra: false,
-              room_id: roomId || null,
-              notes: `${selectedModule.name} - Section ${section}`
+            allSlots.push({
+              date: formatLocalDate(slotDate),
+              dayOffset,
+              section,
+              startTime: `${9 + (section - 1) * 2}:00`
             })
-            
-            // Mark faculty as scheduled at this time (PREVENT conflicts)
-            facultyScheduleMap[facultyKey] = true
-            // Mark section as scheduled
-            moduleScheduleMap[sectionKey] = true
-            
-            facultyRotationIndex++
           }
         }
-        
-        currentDate.setDate(currentDate.getDate() + 1)
+
+        // Shuffle slots randomly
+        shuffleArray(allSlots)
+
+        // Pick slots respecting sectionsPerWeek and sectionsPerDay limits
+        const pickedSlots = []
+        const dayCount = {} // track how many picked per day
+
+        for (const slot of allSlots) {
+          if (pickedSlots.length >= sectionsPerWeek) break
+
+          const dayUsed = dayCount[slot.dayOffset] || 0
+          if (dayUsed >= sectionsPerDay) continue
+
+          pickedSlots.push(slot)
+          dayCount[slot.dayOffset] = dayUsed + 1
+        }
+
+        // Sort picked slots by date then section for clean output
+        pickedSlots.sort((a, b) => {
+          if (a.date !== b.date) return a.date.localeCompare(b.date)
+          return a.section - b.section
+        })
+
+        // Create sessions from picked slots
+        for (const slot of pickedSlots) {
+          // Find available faculty (rotation with conflict check)
+          let sessionFaculty = null
+          let attemptCount = 0
+          const timeKey = `${slot.date}-${slot.startTime}`
+
+          while (sessionFaculty === null && attemptCount < availableFaculty.length) {
+            const candidate = availableFaculty[facultyRotationIndex % availableFaculty.length]
+            // Check this faculty isn't already scheduled at this exact time
+            const alreadyBooked = schedule.some(s =>
+              s.faculty_id === candidate.id &&
+              s.session_date === slot.date &&
+              s.section_number === slot.section
+            )
+            if (!alreadyBooked) {
+              sessionFaculty = candidate
+              break
+            }
+            facultyRotationIndex++
+            attemptCount++
+          }
+
+          if (!sessionFaculty) {
+            console.warn(`No faculty available for ${slot.date} Section ${slot.section}`)
+            continue
+          }
+
+          schedule.push({
+            programme_id: selectedProgramme.id,
+            module_id: selectedModule.id,
+            faculty_id: sessionFaculty.id,
+            faculty_name: sessionFaculty.name,
+            session_date: slot.date,
+            start_time: slot.startTime,
+            duration_hours: HOURS_PER_SECTION,
+            session_type: 'Lecture',
+            section_number: slot.section,
+            academic_week: weekNum,
+            is_extra: false,
+            room_id: null,
+            notes: `${selectedModule.name} - Section ${slot.section}`
+          })
+
+          facultyRotationIndex++
+        }
       }
 
       if (schedule.length === 0) {
-        alert('❌ Could not generate schedule - insufficient faculty to cover all sections')
+        alert('❌ Could not generate schedule - no available slots found')
         setLoading(false)
         return
       }
 
-      alert(`✅ Schedule generated successfully with ${schedule.length} sessions - NO CONFLICTS!`)
+      alert(`✅ Schedule generated: ${schedule.length} sessions randomly distributed across ${endWeekNum - startWeekNum + 1} week(s)!`)
       setGeneratedSchedule(schedule)
       setStep(4)
     } catch (error) {
@@ -273,6 +288,8 @@ export default function AdvancedSchedulerPage() {
         setWeekRange({ startWeek: '', endWeek: '' })
         setSelectedProgramme(null)
         setSelectedModule(null)
+        setSectionsPerWeek(6)
+        setSectionsPerDay(1)
       } else {
         alert(`⚠️ Saved ${successCount} sessions, but ${failedCount} failed:\n\n${errors.slice(0, 5).join('\n')}`)
       }
@@ -430,7 +447,7 @@ export default function AdvancedSchedulerPage() {
       worksheetData.push(headerRow)
 
       // Create rows for each section (1-5)
-      for (let section = 1; section <= SECTIONS_PER_DAY; section++) {
+      for (let section = 1; section <= MAX_SECTIONS_PER_DAY; section++) {
         const sectionRow = [`Section ${section}`]
         uniqueDates.forEach(date => {
           const session = generatedSchedule.find(s =>
@@ -683,12 +700,61 @@ export default function AdvancedSchedulerPage() {
             </select>
 
             {selectedModule && (
-              <div className="bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-700 rounded-lg p-4">
-                <p className="text-sm text-orange-900 dark:text-orange-200">
-                  <strong>Module:</strong> {selectedModule.name}<br/>
-                  <strong>Session Length:</strong> {HOURS_PER_SECTION} hours<br/>
-                  <strong>Sections per Day:</strong> {SECTIONS_PER_DAY}
-                </p>
+              <div className="space-y-4">
+                <div className="bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-700 rounded-lg p-4">
+                  <p className="text-sm text-orange-900 dark:text-orange-200 mb-3">
+                    <strong>Module:</strong> {selectedModule.name}<br/>
+                    <strong>Session Length:</strong> {HOURS_PER_SECTION} hours
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-orange-900 dark:text-orange-200 mb-1">
+                        Sections per Week
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="25"
+                        value={sectionsPerWeek}
+                        onChange={(e) => setSectionsPerWeek(Math.max(1, Math.min(25, Number(e.target.value))))}
+                        className="w-full px-3 py-2 border border-orange-300 dark:border-orange-600 rounded-lg dark:bg-gray-700 dark:text-white text-center font-bold text-lg"
+                      />
+                      <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">Total sessions across Mon–Fri</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-orange-900 dark:text-orange-200 mb-1">
+                        Max Sections per Day
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        value={sectionsPerDay}
+                        onChange={(e) => setSectionsPerDay(Math.max(1, Math.min(5, Number(e.target.value))))}
+                        className="w-full px-3 py-2 border border-orange-300 dark:border-orange-600 rounded-lg dark:bg-gray-700 dark:text-white text-center font-bold text-lg"
+                      />
+                      <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">Cap per single day (1–5)</p>
+                    </div>
+                  </div>
+                </div>
+
+                {sectionsPerDay * 5 < sectionsPerWeek && (
+                  <div className="bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg p-3">
+                    <p className="text-sm text-red-800 dark:text-red-200">
+                      ⚠️ Cannot fit <strong>{sectionsPerWeek}</strong> sections/week with max <strong>{sectionsPerDay}</strong>/day
+                      (only {sectionsPerDay * 5} slots available Mon–Fri). Increase sections/day or decrease sections/week.
+                    </p>
+                  </div>
+                )}
+
+                <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    📊 <strong>Distribution:</strong> {sectionsPerWeek} session{sectionsPerWeek > 1 ? 's' : ''}/week,
+                    max {sectionsPerDay}/day → randomly spread across {Math.min(5, Math.ceil(sectionsPerWeek / sectionsPerDay))} weekdays.
+                    Each week gets a fresh random layout.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -727,7 +793,8 @@ export default function AdvancedSchedulerPage() {
                 Programme: {selectedProgramme?.name}<br/>
                 Module: {selectedModule?.name}<br/>
                 Weeks: {getAcademicWeekLabel(Number(weekRange.startWeek))} → {getAcademicWeekLabel(Number(weekRange.endWeek))}<br/>
-                Total Sessions: {generatedSchedule.length}
+                Sections/Week: {sectionsPerWeek} | Max/Day: {sectionsPerDay}<br/>
+                Total Sessions: {generatedSchedule.length} (randomly distributed)
               </p>
             </div>
 
